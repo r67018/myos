@@ -18,6 +18,15 @@ public:
 
     void put_string(const char* s);
 
+    void* operator new(size_t size, void* buf)
+    {
+        return buf;
+    }
+
+    void operator delete(void* obj) noexcept
+    {
+    }
+
 private:
     void newline();
 
