@@ -11,7 +11,9 @@ add_executable(kernel.elf
         kernel/frame_buffer_config.hpp
         kernel/main.cpp
         kernel/graphics.hpp
-        kernel/graphics.cpp)
+        kernel/graphics.cpp
+        kernel/font.cpp
+        kernel/font.hpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
@@ -56,4 +58,19 @@ target_link_libraries(kernel.elf PRIVATE
         -lc
         -lc++
         -lc++abi
+)
+
+# Compile and link font data
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+execute_process(
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/makefont.py -o hankaku.bin ../kernel/hankaku.txt
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+execute_process(
+        COMMAND objcopy -I binary -O elf64-x86-64 -B i386:x86-64 hankaku.bin hankaku.o
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+target_link_libraries(kernel.elf PRIVATE
+        ${CMAKE_BINARY_DIR}/hankaku.o
 )
