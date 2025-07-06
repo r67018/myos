@@ -5,7 +5,9 @@
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "font.hpp"
+#include "logger.hpp"
 #include "pci.hpp"
+#include "usb/xhci/xhci.hpp"
 
 constexpr PixelColor DESKTOP_BG_COLOR{45, 118, 237};
 constexpr PixelColor DESKTOP_FG_COLOR{255, 255, 255};
@@ -58,6 +60,31 @@ int printk(const char* format, ...)
     return result;
 }
 
+void switch_ehci2xhci(pci::Device xhc_dev)
+{
+    bool intel_ehc_exist = false;
+    for (int i = 0; i < pci::num_devices; ++i)
+    {
+        if (pci::devices[i].class_code.match(0x0cu, 0x03u, 0x20u) /* EHCI */ &&
+            0x8086 == pci::read_vendor_id(pci::devices[i]))
+        {
+            intel_ehc_exist = true;
+            break;
+        }
+    }
+    if (!intel_ehc_exist)
+    {
+        return;
+    }
+
+    uint32_t superspeed_ports = pci::read_conf_reg(xhc_dev, 0xdc); // USB3PRM
+    pci::write_conf_reg(xhc_dev, 0xd8, superspeed_ports); // USB3_PSSEN
+    uint32_t ehci2xhci_ports = pci::read_conf_reg(xhc_dev, 0xd4); // XUSB2PRM
+    pci::write_conf_reg(xhc_dev, 0xd0, ehci2xhci_ports); // XUSB2PR
+    Log(kDebug, "SwitchEhci2Xhci: SS = %02, xHCI = %02x\n",
+        superspeed_ports, ehci2xhci_ports);
+}
+
 extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config)
 {
     switch (frame_buffer_config.pixel_format)
@@ -92,6 +119,49 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
                dev.bus, dev.device, dev.function,
                vendor_id, class_code, dev.header_type);
     }
+
+    pci::Device* xhc_dev = nullptr;
+    for (int i = 0; i < pci::num_devices; ++i)
+    {
+        if (pci::devices[i].class_code.match(0x0cu, 0x03u, 0x30u))
+        {
+            xhc_dev = &pci::devices[i];
+
+            if (0x8086 == pci::read_vendor_id(*xhc_dev))
+            {
+                break;
+            }
+        }
+    }
+
+    if (xhc_dev)
+    {
+        log(kInfo, "xHC has been found: %d.%d.%d\n",
+            xhc_dev->bus, xhc_dev->device, xhc_dev->function);
+    }
+    else
+    {
+        log(kError, "xHC has not been found\n");
+    }
+
+    const WithError<u_int64_t> xhc_bar = pci::read_bar(*xhc_dev, 0);
+    log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
+    const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
+    log(kDebug, "xHC mmio_base: %08lx\n", xhc_mmio_base);
+
+    usb::xhci::Controller xhc{xhc_mmio_base};
+
+    if (0x8086 == pci::read_vendor_id(*xhc_dev))
+    {
+        switch_ehci2xhci(*xhc_dev);
+    }
+    {
+        auto err = xhc.Initialize();
+        log(kDebug, "xhc.Initialize: %s\n", err.Name());
+    }
+
+    log(kInfo, "xHC starting\n");
+    xhc.Run();
 
     while (true) __asm__("hlt");
 }

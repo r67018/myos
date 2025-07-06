@@ -25,7 +25,9 @@ add_executable(kernel.elf
         ${CMAKE_BINARY_DIR}/asmfunc.o
         kernel/logger.cpp
         kernel/logger.hpp
-        kernel/error.hpp)
+        kernel/error.hpp
+        kernel/register.hpp
+        kernel/libcxx_support.cpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
