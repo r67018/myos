@@ -27,7 +27,9 @@ add_executable(kernel.elf
         kernel/logger.hpp
         kernel/error.hpp
         kernel/register.hpp
-        kernel/libcxx_support.cpp)
+        kernel/libcxx_support.cpp
+        kernel/mouse.cpp
+        kernel/mouse.hpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
