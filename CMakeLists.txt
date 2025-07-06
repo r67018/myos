@@ -9,7 +9,9 @@ set(CMAKE_LINKER "ld.lld")
 add_executable(kernel.elf
         kernel/elf.hpp
         kernel/frame_buffer_config.hpp
-        kernel/main.cpp)
+        kernel/main.cpp
+        kernel/graphics.hpp
+        kernel/graphics.cpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
@@ -48,4 +50,10 @@ target_link_options(kernel.elf PRIVATE
         -nostdlib
         -nostartfiles
         -L$ENV{BASEDIR}/lib
+)
+
+target_link_libraries(kernel.elf PRIVATE
+        -lc
+        -lc++
+        -lc++abi
 )
