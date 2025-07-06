@@ -5,6 +5,7 @@
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "font.hpp"
+#include "pci.hpp"
 
 constexpr PixelColor DESKTOP_BG_COLOR{45, 118, 237};
 constexpr PixelColor DESKTOP_FG_COLOR{255, 255, 255};
@@ -78,6 +79,19 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
 
     console = new(console_buf) Console{*pixel_writer, DESKTOP_FG_COLOR, DESKTOP_BG_COLOR};
     printk("Welcom to MikanOS!\n");
+
+    auto err = pci::scan_all_bus();
+    printk("scan_all_bus: %s\n", err.Name());
+
+    for (int i = 0; i < pci::num_devices; ++i)
+    {
+        const auto& dev = pci::devices[i];
+        auto vendor_id = pci::read_vendor_id(dev);
+        auto class_code = pci::read_class_code(dev.bus, dev.device, dev.function);
+        printk("%d.%d.%d: vend %04x, class %08x, head %02x\n",
+               dev.bus, dev.device, dev.function,
+               vendor_id, class_code, dev.header_type);
+    }
 
     while (true) __asm__("hlt");
 }
