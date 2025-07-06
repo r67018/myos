@@ -28,7 +28,7 @@ target_compile_definitions(kernel.elf PRIVATE
         "EFIAPI='__attribute__((ms_abi))'"
 )
 
-add_compile_options(
+target_compile_options(kernel.elf PRIVATE
         -O2
         -Wall
         -g
@@ -46,6 +46,6 @@ target_link_options(kernel.elf PRIVATE
         -Wl,--image-base,0x100000
         -Wl,--static
         -nostdlib
-        # -nostartfiles
-        -Wl,-L${BASEDIR}/lib
+        -nostartfiles
+        -L$ENV{BASEDIR}/lib
 )
