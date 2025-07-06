@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.31)
 project(myos)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_COMPILER "clang")
 set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_LINKER "ld.lld")
 
@@ -13,7 +14,8 @@ add_executable(kernel.elf
         kernel/graphics.hpp
         kernel/graphics.cpp
         kernel/font.cpp
-        kernel/font.hpp)
+        kernel/font.hpp
+        kernel/newlib_support.c)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
@@ -54,11 +56,6 @@ target_link_options(kernel.elf PRIVATE
         -L$ENV{BASEDIR}/lib
 )
 
-target_link_libraries(kernel.elf PRIVATE
-        -lc
-        -lc++
-        -lc++abi
-)
 
 # Compile and link font data
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
@@ -71,6 +68,10 @@ execute_process(
         COMMAND objcopy -I binary -O elf64-x86-64 -B i386:x86-64 hankaku.bin hankaku.o
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
 target_link_libraries(kernel.elf PRIVATE
+        -lc
+        -lc++
+        -lc++abi
         ${CMAKE_BINARY_DIR}/hankaku.o
 )
