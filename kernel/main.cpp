@@ -8,7 +8,8 @@
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter* pixel_writer;
 
-extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config) {
+extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config)
+{
     switch (frame_buffer_config.pixel_format)
     {
     case kPixelRGBResv8BitPerColor:
@@ -21,7 +22,8 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
 
     for (int x = 0; x < frame_buffer_config.horizontal_resolution; ++x)
     {
-        for (int y = 0; y < frame_buffer_config.vertical_resolution; ++y) {
+        for (int y = 0; y < frame_buffer_config.vertical_resolution; ++y)
+        {
             pixel_writer->write(x, y, {255, 255, 255});
         }
     }
