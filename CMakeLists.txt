@@ -6,7 +6,7 @@ set(CMAKE_C_COMPILER "clang")
 set(CMAKE_CXX_COMPILER "clang++")
 set(CMAKE_LINKER "ld.lld")
 
-file(GLOB USB_SOURCES kernel/usb/**/*.cpp kernel/usb/**/*.hpp)
+file(GLOB_RECURSE USB_SOURCES kernel/usb/*.cpp kernel/usb/*.hpp)
 add_executable(kernel.elf
         ${USB_SOURCES}
         kernel/elf.hpp
