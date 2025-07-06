@@ -15,7 +15,9 @@ add_executable(kernel.elf
         kernel/graphics.cpp
         kernel/font.cpp
         kernel/font.hpp
-        kernel/newlib_support.c)
+        kernel/newlib_support.c
+        kernel/console.cpp
+        kernel/console.hpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)

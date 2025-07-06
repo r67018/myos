@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "console.hpp"
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "font.hpp"
@@ -27,24 +28,16 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
             pixel_writer->write(x, y, {255, 255, 255});
         }
     }
-    for (int x = 0; x < 200; ++x)
-    {
-        for (int y = 0; y < 100; ++y)
-        {
-            pixel_writer->write(x, y, {0, 255, 0});
-        }
-    }
 
-    int i = 0;
-    for (char c = '!'; c <= '~'; ++c, ++i)
+    auto fg_color = PixelColor{0, 0, 0};
+    auto bg_color = PixelColor{255, 255, 255};
+    auto console = Console{*pixel_writer, fg_color, bg_color};
+    for (int i = 0; i < 26; ++i)
     {
-        write_ascii(*pixel_writer, 8 * i, 50, c, {0, 0, 0});
+        char buffer[128];
+        sprintf(buffer, "Line %d\n", i + 1);
+        console.put_string(buffer);
     }
-    write_string(*pixel_writer, 0, 66, "Hello, world!", {0, 0, 255});
-
-    char buf[128];
-    sprintf(buf, "1 + 2 = %d", 1 + 2);
-    write_string(*pixel_writer, 0, 82, buf, {0, 0, 0});
 
     while (true) __asm__("hlt");
 }
