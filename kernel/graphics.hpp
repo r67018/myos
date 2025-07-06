@@ -6,14 +6,18 @@
 
 #include "frame_buffer_config.hpp"
 
-struct PixelColor {
+struct PixelColor
+{
     uint8_t r, g, b;
 };
 
 class PixelWriter
 {
 public:
-    explicit PixelWriter(const FrameBufferConfig& config) : config(config) {}
+    explicit PixelWriter(const FrameBufferConfig& config) : config(config)
+    {
+    }
+
     virtual ~PixelWriter() = default;
     virtual void write(int x, int y, const PixelColor& color) = 0;
 
@@ -34,11 +38,14 @@ public:
 
     void write(int x, int y, const PixelColor& color) override;
 
-    void* operator new(size_t size, void* buf) {
+    void* operator new(size_t size, void* buf)
+    {
         return buf;
     }
 
-    void operator delete(void* obj) noexcept {}
+    void operator delete(void* obj) noexcept
+    {
+    }
 };
 
 
@@ -49,12 +56,32 @@ public:
 
     void write(int x, int y, const PixelColor& color) override;
 
-    void* operator new(size_t size, void* buf) {
+    void* operator new(size_t size, void* buf)
+    {
         return buf;
     }
 
-    void operator delete(void* obj) noexcept {}
+    void operator delete(void* obj) noexcept
+    {
+    }
 };
+
+template <typename T>
+struct Vector2D
+{
+    T x, y;
+
+    template <typename U>
+    Vector2D& operator +=(const Vector2D<U>& rhs)
+    {
+        x += rhs.x;
+        y += rhs.y;
+        return *this;
+    }
+};
+
+void fill_rectangle(PixelWriter& writer, const Vector2D<int>& pos, const Vector2D<int>& size, const PixelColor& color);
+void draw_rectangle(PixelWriter& writer, const Vector2D<int>& pos, const Vector2D<int>& size, const PixelColor& color);
 
 
 #endif //GRAPHICS_HPP
