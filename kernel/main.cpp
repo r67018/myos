@@ -1,9 +1,11 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "asmfunc.hpp"
 #include "frame_buffer_config.hpp"
 #include "console.hpp"
 #include "graphics.hpp"
+#include "interrupt.hpp"
 #include "logger.hpp"
 #include "pci.hpp"
 #include "mouse.hpp"
@@ -64,6 +66,23 @@ MouseCursor* mouse_cursor;
 void mouse_observer(int8_t displacement_x, int8_t displacement_y)
 {
     mouse_cursor->move_relative({displacement_x, displacement_y});
+}
+
+usb::xhci::Controller* xhc;
+
+// xHCの割り込みハンドラ
+__attribute__((interrupt))
+void int_handler_xhci(InterruptFrame* frame)
+{
+    while (xhc->PrimaryEventRing()->HasFront())
+    {
+        if (auto err = usb::xhci::ProcessEvent(*xhc))
+        {
+            log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
+                err.Name(), err.File(), err.Line());
+        }
+    }
+    notify_end_of_interrupt();
 }
 
 extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config)
@@ -128,6 +147,19 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
         log(kError, "xHC has not been found\n");
     }
 
+    // 割り込みベクタを設定してIDTをCPUに登録
+    const uint16_t cs = GetCS();
+    set_IDT_entry(idt[InterruptVector::XHCI], make_IDT_attr(DescriptorType::InterruptGate, 0),
+                  reinterpret_cast<uint64_t>(int_handler_xhci), cs);
+    LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
+    // MSI割り込みを有効化
+    // Destination ID(CPUコア番号)
+    // 0xfee00020番地の31:24ビットにプログラムが動作しているコアのLocal APCI IDを取得できる。
+    // 他のコアはまだ停止しているため、BSP(BootStrap Processor)のLocal APIC IDが得られる。
+    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;
+    pci::configure_msi_fixed_destination(*xhc_dev, bsp_local_apic_id, pci::MSITriggerMode::Level,
+                                         pci::MSIDeliveryMode::Fixed, InterruptVector::XHCI, 0);
+
     const WithError<u_int64_t> xhc_bar = pci::read_bar(*xhc_dev, 0);
     log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
     const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
@@ -146,6 +178,9 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
 
     log(kInfo, "xHC starting\n");
     xhc.Run();
+
+    ::xhc = &xhc;
+    __asm__("sti"); // 割り込みを有効化
 
     // マウスのオブザーバーを設定
     usb::HIDMouseDriver::default_observer = mouse_observer;
@@ -167,18 +202,5 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
         }
     }
 
-    // xHCに溜まったイベントを処理
-    while (true)
-    {
-        if (auto err = usb::xhci::ProcessEvent(xhc))
-        {
-            log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
-                err.Name(), err.File(), err.Line());
-        }
-    }
-
     while (true) __asm__("hlt");
 }
-
-
-
