@@ -6,14 +6,13 @@
 #include  <Library/BaseMemoryLib.h>
 #include  <Protocol/LoadedImage.h>
 #include  <Protocol/SimpleFileSystem.h>
-#include  <Protocol/DiskIo2.h>
-#include  <Protocol/BlockIo.h>
 #include  <Guid/FileInfo.h>
 
 #include "elf.hpp"
 #include "frame_buffer_config.hpp"
 
-struct MemoryMap {
+struct MemoryMap
+{
     UINTN buffer_size;
     VOID* buffer;
     UINTN map_size;
@@ -22,99 +21,107 @@ struct MemoryMap {
     UINT32 descriptor_version;
 };
 
-EFI_STATUS GetMemoryMap(struct MemoryMap* map) {
-    if (map->buffer == NULL) {
+EFI_STATUS GetMemoryMap(struct MemoryMap* map)
+{
+    if (map->buffer == NULL)
+    {
         return EFI_BUFFER_TOO_SMALL;
     }
-    
+
     map->map_size = map->buffer_size;
     return gBS->GetMemoryMap(
-            &map->map_size,
-            (EFI_MEMORY_DESCRIPTOR*)map->buffer,
-            &map->map_key,
-            &map->descriptor_size,
-            &map->descriptor_version);
+        &map->map_size,
+        (EFI_MEMORY_DESCRIPTOR*)map->buffer,
+        &map->map_key,
+        &map->descriptor_size,
+        &map->descriptor_version);
 }
 
-const CHAR16* GetMemoryTypeUnicode(EFI_MEMORY_TYPE type) {
-    switch (type) {
-        case EfiReservedMemoryType: return L"EfiReservedMemoryType";
-        case EfiLoaderCode: return L"EfiLoaderCode";
-        case EfiLoaderData: return L"EfiLoaderData";
-        case EfiBootServicesCode: return L"EfiBootServicesCode";
-        case EfiBootServicesData: return L"EfiBootServicesData";
-        case EfiRuntimeServicesCode: return L"EfiRuntimeServicesCode";
-        case EfiRuntimeServicesData: return L"EfiRuntimeServicesData";
-        case EfiConventionalMemory: return L"EfiConventionalMemory";
-        case EfiUnusableMemory: return L"EfiUnusableMemory";
-        case EfiACPIReclaimMemory: return L"EfiACPIReclaimMemory";
-        case EfiACPIMemoryNVS: return L"EfiACPIMemoryNVS";
-        case EfiMemoryMappedIO: return L"EfiMemoryMappedIO";
-        case EfiMemoryMappedIOPortSpace: return L"EfiMemoryMappedIOPortSpace";
-        case EfiPalCode: return L"EfiPalCode";
-        case EfiPersistentMemory: return L"EfiPersistentMemory";
-        case EfiMaxMemoryType: return L"EfiMaxMemoryType";
-        default: return L"InvalidMemoryType";
+const CHAR16* GetMemoryTypeUnicode(EFI_MEMORY_TYPE type)
+{
+    switch (type)
+    {
+    case EfiReservedMemoryType: return L"EfiReservedMemoryType";
+    case EfiLoaderCode: return L"EfiLoaderCode";
+    case EfiLoaderData: return L"EfiLoaderData";
+    case EfiBootServicesCode: return L"EfiBootServicesCode";
+    case EfiBootServicesData: return L"EfiBootServicesData";
+    case EfiRuntimeServicesCode: return L"EfiRuntimeServicesCode";
+    case EfiRuntimeServicesData: return L"EfiRuntimeServicesData";
+    case EfiConventionalMemory: return L"EfiConventionalMemory";
+    case EfiUnusableMemory: return L"EfiUnusableMemory";
+    case EfiACPIReclaimMemory: return L"EfiACPIReclaimMemory";
+    case EfiACPIMemoryNVS: return L"EfiACPIMemoryNVS";
+    case EfiMemoryMappedIO: return L"EfiMemoryMappedIO";
+    case EfiMemoryMappedIOPortSpace: return L"EfiMemoryMappedIOPortSpace";
+    case EfiPalCode: return L"EfiPalCode";
+    case EfiPersistentMemory: return L"EfiPersistentMemory";
+    case EfiMaxMemoryType: return L"EfiMaxMemoryType";
+    default: return L"InvalidMemoryType";
     }
 }
 
-EFI_STATUS SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
+EFI_STATUS SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file)
+{
     CHAR8 buf[256];
     UINTN len;
-    
+
     CHAR8* header =
-            "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
+        "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
     len = AsciiStrLen(header);
     file->Write(file, &len, header);
-    
+
     Print(L"map->buffer = %08lx, map->map_size = %08lx\n",
           map->buffer, map->map_size);
-    
+
     EFI_PHYSICAL_ADDRESS iter;
     int i;
     for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0;
          iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
-         iter += map->descriptor_size, i++) {
+         iter += map->descriptor_size, i++)
+    {
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)iter;
         len = AsciiSPrint(
-                buf, sizeof(buf),
-                "%u, %x, %-ls, %08lx, %lx, %lx\n",
-                i, desc->Type, GetMemoryTypeUnicode(desc->Type),
-                desc->PhysicalStart, desc->NumberOfPages,
-                desc->Attribute & 0xfffflu);
+            buf, sizeof(buf),
+            "%u, %x, %-ls, %08lx, %lx, %lx\n",
+            i, desc->Type, GetMemoryTypeUnicode(desc->Type),
+            desc->PhysicalStart, desc->NumberOfPages,
+            desc->Attribute & 0xfffflu);
         file->Write(file, &len, buf);
     }
-    
+
     return EFI_SUCCESS;
 }
 
-EFI_STATUS OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
+EFI_STATUS OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root)
+{
     EFI_LOADED_IMAGE_PROTOCOL* loaded_image;
     EFI_SIMPLE_FILE_SYSTEM_PROTOCOL* fs;
-    
+
     gBS->OpenProtocol(
-            image_handle,
-            &gEfiLoadedImageProtocolGuid,
-            (VOID**)&loaded_image,
-            image_handle,
-            NULL,
-            EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
-    
+        image_handle,
+        &gEfiLoadedImageProtocolGuid,
+        (VOID**)&loaded_image,
+        image_handle,
+        NULL,
+        EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
+
     gBS->OpenProtocol(
-            loaded_image->DeviceHandle,
-            &gEfiSimpleFileSystemProtocolGuid,
-            (VOID**)&fs,
-            image_handle,
-            NULL,
-            EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
-    
+        loaded_image->DeviceHandle,
+        &gEfiSimpleFileSystemProtocolGuid,
+        (VOID**)&fs,
+        image_handle,
+        NULL,
+        EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
+
     fs->OpenVolume(fs, root);
-    
+
     return EFI_SUCCESS;
 }
 
 EFI_STATUS OpenGOP(EFI_HANDLE image_handle,
-                   EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
+                   EFI_GRAPHICS_OUTPUT_PROTOCOL** gop)
+{
     UINTN num_gop_handles = 0;
     EFI_HANDLE* gop_handles = NULL;
     gBS->LocateHandleBuffer(
@@ -137,37 +144,43 @@ EFI_STATUS OpenGOP(EFI_HANDLE image_handle,
     return EFI_SUCCESS;
 }
 
-const CHAR16* GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT fmt) {
-  switch (fmt) {
+const CHAR16* GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT fmt)
+{
+    switch (fmt)
+    {
     case PixelRedGreenBlueReserved8BitPerColor:
-      return L"PixelRedGreenBlueReserved8BitPerColor";
+        return L"PixelRedGreenBlueReserved8BitPerColor";
     case PixelBlueGreenRedReserved8BitPerColor:
-      return L"PixelBlueGreenRedReserved8BitPerColor";
+        return L"PixelBlueGreenRedReserved8BitPerColor";
     case PixelBitMask:
-      return L"PixelBitMask";
+        return L"PixelBitMask";
     case PixelBltOnly:
-      return L"PixelBltOnly";
+        return L"PixelBltOnly";
     case PixelFormatMax:
-      return L"PixelFormatMax";
+        return L"PixelFormatMax";
     default:
-      return L"InvalidPixelFormat";
-  }
+        return L"InvalidPixelFormat";
+    }
 }
 
-void CalcLoadAddressRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last) {
+void CalcLoadAddressRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last)
+{
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
     *first = MAX_UINT64;
     *last = 0;
-    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i)
+    {
         if (phdr[i].p_type != PT_LOAD) continue;
         *first = MIN(*first, phdr[i].p_vaddr);
         *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
     }
 }
 
-void CopyLoadSegments(Elf64_Ehdr* ehdr) {
+void CopyLoadSegments(Elf64_Ehdr* ehdr)
+{
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
-    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
+    for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i)
+    {
         if (phdr[i].p_type != PT_LOAD) continue;
 
         UINT64 segm_in_file = (UINT64)ehdr + phdr[i].p_offset;
@@ -178,27 +191,33 @@ void CopyLoadSegments(Elf64_Ehdr* ehdr) {
     }
 }
 
-void Halt(void) {
-    while(1) __asm__("hlt");
+void Halt(void)
+{
+    while (1) __asm__("hlt");
 }
 
 
-EFI_STATUS EFIAPI UefiMain(
+EFI_STATUS EFIAPI
+
+
+
+UefiMain(
     EFI_HANDLE image_handle,
-    EFI_SYSTEM_TABLE* system_table) {
+    EFI_SYSTEM_TABLE* system_table)
+{
     // メモリマップを読み込む
     CHAR8 memmap_buf[4096 * 4];
     struct MemoryMap memmap = {sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0};
     GetMemoryMap(&memmap);
-    
+
     EFI_FILE_PROTOCOL* root_dir;
     OpenRootDir(image_handle, &root_dir);
-    
+
     EFI_FILE_PROTOCOL* memmap_file;
     root_dir->Open(
         root_dir, &memmap_file, L"\\memmap",
         EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
-    
+
     SaveMemoryMap(&memmap, memmap_file);
     memmap_file->Close(memmap_file);
 
@@ -206,14 +225,14 @@ EFI_STATUS EFIAPI UefiMain(
     EFI_GRAPHICS_OUTPUT_PROTOCOL* gop;
     OpenGOP(image_handle, &gop);
     Print(L"Resolution: %ux%u, Pixel Format: %s, %u pixels/line\n",
-        gop->Mode->Info->HorizontalResolution,
-        gop->Mode->Info->VerticalResolution,
-        GetPixelFormatUnicode(gop->Mode->Info->PixelFormat),
-        gop->Mode->Info->PixelsPerScanLine);
+          gop->Mode->Info->HorizontalResolution,
+          gop->Mode->Info->VerticalResolution,
+          GetPixelFormatUnicode(gop->Mode->Info->PixelFormat),
+          gop->Mode->Info->PixelsPerScanLine);
     Print(L"Frame Buffer: 0x%0lx - 0x%0lx, Size: %lu bytes\n",
-        gop->Mode->FrameBufferBase,
-        gop->Mode->FrameBufferBase + gop->Mode->FrameBufferSize,
-        gop->Mode->FrameBufferSize);
+          gop->Mode->FrameBufferBase,
+          gop->Mode->FrameBufferBase + gop->Mode->FrameBufferSize,
+          gop->Mode->FrameBufferSize);
 
     // カーネルのファイルを読み込む
     EFI_FILE_PROTOCOL* kernel_file;
@@ -234,12 +253,14 @@ EFI_STATUS EFIAPI UefiMain(
     VOID* kernel_buffer;
     EFI_STATUS status;
     status = gBS->AllocatePool(EfiLoaderData, kernel_file_size, &kernel_buffer);
-    if (EFI_ERROR(status)) {
+    if (EFI_ERROR(status))
+    {
         Print(L"Failed to allocate pool: %r\n", status);
         Halt();
     }
     status = kernel_file->Read(kernel_file, &kernel_file_size, kernel_buffer);
-    if (EFI_ERROR(status)) {
+    if (EFI_ERROR(status))
+    {
         Print(L"Error: %r", status);
         Halt();
     }
@@ -252,7 +273,8 @@ EFI_STATUS EFIAPI UefiMain(
     // 先頭と末尾のアドレスから割り当てるメモリのページ数を計算する
     UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
     status = gBS->AllocatePages(AllocateAddress, EfiLoaderData, num_pages, &kernel_first_addr);
-    if (EFI_ERROR(status)) {
+    if (EFI_ERROR(status))
+    {
         Print(L"Failed to allocate pages: %r\n", status);
         Halt();
     }
@@ -263,21 +285,25 @@ EFI_STATUS EFIAPI UefiMain(
 
     // 一時領域のメモリを開放する
     status = gBS->FreePool(kernel_buffer);
-    if (EFI_ERROR(status)) {
+    if (EFI_ERROR(status))
+    {
         Print(L"Failed to free pool: %r\n", status);
         Halt();
     }
 
     // ブートサービスを停止する
     status = gBS->ExitBootServices(image_handle, memmap.map_key);
-    if (EFI_ERROR(status)) {
+    if (EFI_ERROR(status))
+    {
         status = GetMemoryMap(&memmap);
-        if (EFI_ERROR(status)) {
+        if (EFI_ERROR(status))
+        {
             Print(L"Failed to get memory map: %r\n", status);
             while (1);
         }
         status = gBS->ExitBootServices(image_handle, memmap.map_key);
-        if (EFI_ERROR(status)) {
+        if (EFI_ERROR(status))
+        {
             Print(L"Could not exit boot service: %r\n", status);
             while (1);
         }
@@ -291,16 +317,17 @@ EFI_STATUS EFIAPI UefiMain(
         gop->Mode->Info->VerticalResolution,
         0
     };
-    switch (gop->Mode->Info->PixelFormat) {
-        case PixelRedGreenBlueReserved8BitPerColor:
-            config.pixel_format = kPixelRGBResv8BitPerColor;
-            break;
-        case PixelBlueGreenRedReserved8BitPerColor:
-            config.pixel_format = kPixelBGRResv8BitPerColor;
-            break;
-        default:
-            Print(L"unimplemented pixel format: %d\n", gop->Mode->Info->PixelFormat);
-            Halt();
+    switch (gop->Mode->Info->PixelFormat)
+    {
+    case PixelRedGreenBlueReserved8BitPerColor:
+        config.pixel_format = kPixelRGBResv8BitPerColor;
+        break;
+    case PixelBlueGreenRedReserved8BitPerColor:
+        config.pixel_format = kPixelBGRResv8BitPerColor;
+        break;
+    default:
+        Print(L"unimplemented pixel format: %d\n", gop->Mode->Info->PixelFormat);
+        Halt();
     }
 
     // カーネルを呼び出す
@@ -312,7 +339,7 @@ EFI_STATUS EFIAPI UefiMain(
     entry_point(&config);
 
     Print(L"All done!\n");
-    
+
     while (1);
     return EFI_SUCCESS;
 }
