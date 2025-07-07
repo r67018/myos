@@ -6,7 +6,7 @@
 
 namespace
 {
-    auto log_level = kDebug;
+    auto log_level = kInfo;
 }
 
 extern Console* console;
