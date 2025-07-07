@@ -9,6 +9,7 @@
 #include "logger.hpp"
 #include "pci.hpp"
 #include "mouse.hpp"
+#include "queue.hpp"
 #include "usb/xhci/xhci.hpp"
 #include "usb/classdriver/mouse.hpp"
 
@@ -70,18 +71,21 @@ void mouse_observer(int8_t displacement_x, int8_t displacement_y)
 
 usb::xhci::Controller* xhc;
 
+struct Message
+{
+    enum class Type
+    {
+        InterruptXHCI,
+    } type;
+};
+
+ArrayQueue<Message>* main_queue;
+
 // xHCの割り込みハンドラ
 __attribute__((interrupt))
 void int_handler_xhci(InterruptFrame* frame)
 {
-    while (xhc->PrimaryEventRing()->HasFront())
-    {
-        if (auto err = usb::xhci::ProcessEvent(*xhc))
-        {
-            log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
-                err.Name(), err.File(), err.Line());
-        }
-    }
+    main_queue->push(Message{Message::Type::InterruptXHCI});
     notify_end_of_interrupt();
 }
 
@@ -180,7 +184,6 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     xhc.Run();
 
     ::xhc = &xhc;
-    __asm__("sti"); // 割り込みを有効化
 
     // マウスのオブザーバーを設定
     usb::HIDMouseDriver::default_observer = mouse_observer;
@@ -202,5 +205,44 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
         }
     }
 
-    while (true) __asm__("hlt");
+    // キューを作成
+    std::array<Message, 32> main_queue_data{};
+    ArrayQueue main_queue{main_queue_data};
+    ::main_queue = &main_queue;
+    // 割り込みのイベントループ
+    while (true)
+    {
+        // 割り込みフラグ(IF)をクリアして割り込みを無効化
+        // キューの操作中に割り込みが起きるとデータの整合性が損なわれるため
+        __asm__("cli");
+        // キューにメッセージが入ってないなら次の割り込みまで待つ
+        if (main_queue.count() == 0)
+        {
+            // stiで割り込みを有効化して、hltで割り込みを待機
+            __asm__("sti\n\thlt");
+            continue;
+        }
+
+        // キューからメッセージを取り出す
+        auto msg = main_queue.front();
+        main_queue.pop();
+        // 割り込みフラグ(IF)を再度有効化
+        __asm__("sti");
+
+        switch (msg.type)
+        {
+        case Message::Type::InterruptXHCI:
+            while (xhc.PrimaryEventRing()->HasFront())
+            {
+                if (auto err = usb::xhci::ProcessEvent(xhc))
+                {
+                    log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
+                        err.Name(), err.File(), err.Line());
+                }
+            }
+            break;
+        default:
+            log(kError, "Unknown message type: %d\n", static_cast<int>(msg.type));
+        }
+    }
 }

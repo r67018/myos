@@ -31,7 +31,8 @@ add_executable(kernel.elf
         kernel/mouse.cpp
         kernel/mouse.hpp
         kernel/interrupt.cpp
-        kernel/interrupt.hpp)
+        kernel/interrupt.hpp
+        kernel/queue.hpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
