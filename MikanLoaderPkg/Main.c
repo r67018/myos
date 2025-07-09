@@ -8,18 +8,10 @@
 #include  <Protocol/SimpleFileSystem.h>
 #include  <Guid/FileInfo.h>
 
+#include "memory_map.hpp"
 #include "elf.hpp"
 #include "frame_buffer_config.hpp"
 
-struct MemoryMap
-{
-    UINTN buffer_size;
-    VOID* buffer;
-    UINTN map_size;
-    UINTN map_key;
-    UINTN descriptor_size;
-    UINT32 descriptor_version;
-};
 
 EFI_STATUS GetMemoryMap(struct MemoryMap* map)
 {
@@ -334,9 +326,9 @@ UefiMain(
     // EFIのエントリーポイントは先頭から24バイトの位置に8バイトの整数として格納されている
     UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
 
-    typedef void EntryPointType(struct FrameBufferConfig*);
+    typedef void EntryPointType(struct FrameBufferConfig*, struct MemoryMap*);
     EntryPointType* entry_point = (EntryPointType*)entry_addr;
-    entry_point(&config);
+    entry_point(&config, &memmap);
 
     Print(L"All done!\n");
 

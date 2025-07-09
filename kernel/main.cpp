@@ -2,12 +2,13 @@
 #include <cstdio>
 
 #include "asmfunc.hpp"
-#include "frame_buffer_config.hpp"
 #include "console.hpp"
+#include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
 #include "pci.hpp"
+#include "memory_map.hpp"
 #include "mouse.hpp"
 #include "queue.hpp"
 #include "usb/xhci/xhci.hpp"
@@ -89,7 +90,8 @@ void int_handler_xhci(InterruptFrame* frame)
     notify_end_of_interrupt();
 }
 
-extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config)
+extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config,
+                                        const MemoryMap& memory_map)
 {
     switch (frame_buffer_config.pixel_format)
     {
@@ -110,6 +112,32 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
 
     console = new(console_buf) Console{*pixel_writer, DESKTOP_FG_COLOR, DESKTOP_BG_COLOR};
     printk("Welcom to MikanOS!\n");
+
+    // メモリマップを出力
+    std::array available_memory_types{
+        MemoryType::EfiBootServicesCode,
+        MemoryType::EfiBootServicesData,
+        MemoryType::EfiConventionalMemory,
+    };
+    printk("memory_map: %p\n", &memory_map);
+    for (auto iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
+         iter < reinterpret_cast<uintptr_t>(memory_map.buffer) + memory_map.buffer_size;
+         iter += memory_map.descriptor_size)
+    {
+        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
+        for (const auto& available_memory_type : available_memory_types)
+        {
+            if (desc->type == available_memory_type)
+            {
+                printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
+                       desc->type,
+                       desc->physical_start,
+                       desc->physical_start + desc->number_of_pages * 4096 - 1,
+                       desc->number_of_pages,
+                       desc->attribute);
+            }
+        }
+    }
 
     // マウスカーソルのインスタンス生成
     mouse_cursor = new(mouse_cursor_buf) MouseCursor{pixel_writer, DESKTOP_BG_COLOR, {300, 200}};
