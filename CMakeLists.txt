@@ -33,7 +33,10 @@ add_executable(kernel.elf
         kernel/interrupt.cpp
         kernel/interrupt.hpp
         kernel/queue.hpp
-        kernel/memory_map.hpp)
+        kernel/memory_map.hpp
+        kernel/segment.cpp
+        kernel/segment.hpp
+        kernel/x86_descriptor.hpp)
 
 include_directories(kernel)
 include_directories(MikanLoaderPkg)
@@ -43,6 +46,7 @@ target_include_directories(kernel.elf PRIVATE
         "$ENV{BASEDIR}/include/freetype2"
         "$ENV{EDK2DIR}/MdePkg/Include"
         "$ENV{EDK2DIR}/MdePkg/Include/X64"
+        "${CMAKE_SOURCE_DIR}/mikanos/kernel"
 )
 target_compile_definitions(kernel.elf PRIVATE
         __ELF__

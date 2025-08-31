@@ -19,13 +19,12 @@ constexpr PixelColor DESKTOP_FG_COLOR{255, 255, 255};
 
 
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
-PixelWriter* pixel_writer;
+PixelWriter *pixel_writer;
 
 char console_buf[sizeof(Console)];
-Console* console;
+Console *console;
 
-int printk(const char* format, ...)
-{
+int printk(const char *format, ...) {
     va_list ap;
     char s[1024];
 
@@ -37,20 +36,16 @@ int printk(const char* format, ...)
     return result;
 }
 
-void switch_ehci2xhci(pci::Device xhc_dev)
-{
+void switch_ehci2xhci(pci::Device xhc_dev) {
     bool intel_ehc_exist = false;
-    for (int i = 0; i < pci::num_devices; ++i)
-    {
+    for (int i = 0; i < pci::num_devices; ++i) {
         if (pci::devices[i].class_code.match(0x0cu, 0x03u, 0x20u) /* EHCI */ &&
-            0x8086 == pci::read_vendor_id(pci::devices[i]))
-        {
+            0x8086 == pci::read_vendor_id(pci::devices[i])) {
             intel_ehc_exist = true;
             break;
         }
     }
-    if (!intel_ehc_exist)
-    {
+    if (!intel_ehc_exist) {
         return;
     }
 
@@ -63,44 +58,45 @@ void switch_ehci2xhci(pci::Device xhc_dev)
 }
 
 char mouse_cursor_buf[sizeof(MouseCursor)];
-MouseCursor* mouse_cursor;
+MouseCursor *mouse_cursor;
 
-void mouse_observer(int8_t displacement_x, int8_t displacement_y)
-{
+void mouse_observer(int8_t displacement_x, int8_t displacement_y) {
     mouse_cursor->move_relative({displacement_x, displacement_y});
 }
 
-usb::xhci::Controller* xhc;
+usb::xhci::Controller *xhc;
 
-struct Message
-{
-    enum class Type
-    {
+struct Message {
+    enum class Type {
         InterruptXHCI,
     } type;
 };
 
-ArrayQueue<Message>* main_queue;
+ArrayQueue<Message> *main_queue;
 
 // xHCの割り込みハンドラ
 __attribute__((interrupt))
-void int_handler_xhci(InterruptFrame* frame)
-{
+void int_handler_xhci(InterruptFrame *frame) {
     main_queue->push(Message{Message::Type::InterruptXHCI});
     notify_end_of_interrupt();
 }
 
-extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_config,
-                                        const MemoryMap& memory_map)
-{
-    switch (frame_buffer_config.pixel_format)
-    {
-    case kPixelRGBResv8BitPerColor:
-        pixel_writer = new(pixel_writer_buf) RGBResv8BitPerColorPixelWriter{frame_buffer_config};
-        break;
-    case kPixelBGRResv8BitPerColor:
-        pixel_writer = new(pixel_writer_buf) BGRResv8BitPerColorPixelWriter{frame_buffer_config};
-        break;
+// スタック領域
+alignas(16) uint8_t kernel_main_stack[1024 * 1024];
+
+extern "C" [[noreturn]] void KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
+                                                const MemoryMap &memory_map_ref) {
+    // ブートローダーの領域にあるデータをカーネルのスタック領域へコピー
+    FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
+    MemoryMap memory_map{memory_map_ref};
+
+    switch (frame_buffer_config.pixel_format) {
+        case kPixelRGBResv8BitPerColor:
+            pixel_writer = new(pixel_writer_buf) RGBResv8BitPerColorPixelWriter{frame_buffer_config};
+            break;
+        case kPixelBGRResv8BitPerColor:
+            pixel_writer = new(pixel_writer_buf) BGRResv8BitPerColorPixelWriter{frame_buffer_config};
+            break;
     }
 
     const int FRAME_WIDTH = static_cast<int>(frame_buffer_config.horizontal_resolution);
@@ -122,13 +118,10 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     printk("memory_map: %p\n", &memory_map);
     for (auto iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
          iter < reinterpret_cast<uintptr_t>(memory_map.buffer) + memory_map.buffer_size;
-         iter += memory_map.descriptor_size)
-    {
-        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
-        for (const auto& available_memory_type : available_memory_types)
-        {
-            if (desc->type == available_memory_type)
-            {
+         iter += memory_map.descriptor_size) {
+        auto desc = reinterpret_cast<MemoryDescriptor *>(iter);
+        for (const auto &available_memory_type: available_memory_types) {
+            if (desc->type == available_memory_type) {
                 printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
                        desc->type,
                        desc->physical_start,
@@ -145,9 +138,8 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     auto err = pci::scan_all_bus();
     printk("scan_all_bus: %s\n", err.Name());
 
-    for (int i = 0; i < pci::num_devices; ++i)
-    {
-        const auto& dev = pci::devices[i];
+    for (int i = 0; i < pci::num_devices; ++i) {
+        const auto &dev = pci::devices[i];
         auto vendor_id = pci::read_vendor_id(dev);
         auto class_code = pci::read_class_code(dev.bus, dev.device, dev.function);
         printk("%d.%d.%d: vend %04x, class %08x, head %02x\n",
@@ -155,27 +147,21 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
                vendor_id, class_code, dev.header_type);
     }
 
-    pci::Device* xhc_dev = nullptr;
-    for (int i = 0; i < pci::num_devices; ++i)
-    {
-        if (pci::devices[i].class_code.match(0x0cu, 0x03u, 0x30u))
-        {
+    pci::Device *xhc_dev = nullptr;
+    for (int i = 0; i < pci::num_devices; ++i) {
+        if (pci::devices[i].class_code.match(0x0cu, 0x03u, 0x30u)) {
             xhc_dev = &pci::devices[i];
 
-            if (0x8086 == pci::read_vendor_id(*xhc_dev))
-            {
+            if (0x8086 == pci::read_vendor_id(*xhc_dev)) {
                 break;
             }
         }
     }
 
-    if (xhc_dev)
-    {
+    if (xhc_dev) {
         log(kInfo, "xHC has been found: %d.%d.%d\n",
             xhc_dev->bus, xhc_dev->device, xhc_dev->function);
-    }
-    else
-    {
+    } else {
         log(kError, "xHC has not been found\n");
     }
 
@@ -188,7 +174,7 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     // Destination ID(CPUコア番号)
     // 0xfee00020番地の31:24ビットにプログラムが動作しているコアのLocal APCI IDを取得できる。
     // 他のコアはまだ停止しているため、BSP(BootStrap Processor)のLocal APIC IDが得られる。
-    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;
+    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t *>(0xfee00020) >> 24;
     pci::configure_msi_fixed_destination(*xhc_dev, bsp_local_apic_id, pci::MSITriggerMode::Level,
                                          pci::MSIDeliveryMode::Fixed, InterruptVector::XHCI, 0);
 
@@ -199,11 +185,9 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
 
     usb::xhci::Controller xhc{xhc_mmio_base};
 
-    if (0x8086 == pci::read_vendor_id(*xhc_dev))
-    {
+    if (0x8086 == pci::read_vendor_id(*xhc_dev)) {
         switch_ehci2xhci(*xhc_dev);
-    }
-    {
+    } {
         auto err = xhc.Initialize();
         log(kDebug, "xhc.Initialize: %s\n", err.Name());
     }
@@ -217,15 +201,12 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     usb::HIDMouseDriver::default_observer = mouse_observer;
 
     // USBを調べて接続済みポートの設定を行う。
-    for (int i = 1; i <= xhc.MaxPorts(); ++i)
-    {
+    for (int i = 1; i <= xhc.MaxPorts(); ++i) {
         auto port = xhc.PortAt(i);
         log(kDebug, "Port %d: IsConnected=%d\n", i, port.IsConnected());
 
-        if (port.IsConnected())
-        {
-            if (auto err = usb::xhci::ConfigurePort(xhc, port))
-            {
+        if (port.IsConnected()) {
+            if (auto err = usb::xhci::ConfigurePort(xhc, port)) {
                 log(kError, "Failed to configure port: %s at %s:%d\n",
                     err.Name(), err.File(), err.Line());
                 continue;
@@ -238,14 +219,12 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
     ArrayQueue main_queue{main_queue_data};
     ::main_queue = &main_queue;
     // 割り込みのイベントループ
-    while (true)
-    {
+    while (true) {
         // 割り込みフラグ(IF)をクリアして割り込みを無効化
         // キューの操作中に割り込みが起きるとデータの整合性が損なわれるため
         __asm__("cli");
         // キューにメッセージが入ってないなら次の割り込みまで待つ
-        if (main_queue.count() == 0)
-        {
+        if (main_queue.count() == 0) {
             // stiで割り込みを有効化して、hltで割り込みを待機
             __asm__("sti\n\thlt");
             continue;
@@ -257,20 +236,17 @@ extern "C" [[noreturn]] void KernelMain(const FrameBufferConfig& frame_buffer_co
         // 割り込みフラグ(IF)を再度有効化
         __asm__("sti");
 
-        switch (msg.type)
-        {
-        case Message::Type::InterruptXHCI:
-            while (xhc.PrimaryEventRing()->HasFront())
-            {
-                if (auto err = usb::xhci::ProcessEvent(xhc))
-                {
-                    log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
-                        err.Name(), err.File(), err.Line());
+        switch (msg.type) {
+            case Message::Type::InterruptXHCI:
+                while (xhc.PrimaryEventRing()->HasFront()) {
+                    if (auto err = usb::xhci::ProcessEvent(xhc)) {
+                        log(kError, "Error while ProcessingEvent: %s at %s:%d\n",
+                            err.Name(), err.File(), err.Line());
+                    }
                 }
-            }
-            break;
-        default:
-            log(kError, "Unknown message type: %d\n", static_cast<int>(msg.type));
+                break;
+            default:
+                log(kError, "Unknown message type: %d\n", static_cast<int>(msg.type));
         }
     }
 }

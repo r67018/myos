@@ -56,6 +56,16 @@ inline bool operator==(MemoryType lhs, const uint32_t rhs)
 {
     return static_cast<uint32_t>(lhs) == rhs;
 }
+
+inline bool is_available(const MemoryType type)
+{
+    return
+        type == MemoryType::EfiBootServicesCode ||
+        type == MemoryType::EfiBootServicesData ||
+        type == MemoryType::EfiConventionalMemory;
+}
+
+constexpr int UEFI_PAGE_SIZE = 4096;
 #endif // __cplusplus
 
 #endif //MEMORY_MAP_HPP
